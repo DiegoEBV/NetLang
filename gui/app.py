@@ -59,8 +59,8 @@ class DeviceModel:
         self.mask       = '255.255.255.0'
         self.gateway    = ''
         self.subnet_ref = ''
-        # Contador de interfaces (para asignar nombres automáticamente)
         self._iface_seq = 0
+        self.shape_id   = None  # asignado en _draw_device
 
     def next_iface(self) -> str:
         if self.dtype == 'switch':
@@ -561,36 +561,40 @@ class NetLangApp(tk.Tk):
         return self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
 
     def _on_click(self, event):
-        x, y   = self._cxy(event)
-        tool   = self._tool
-        dev    = self._hit_device(x, y)
-        conn   = self._hit_connection(x, y) if not dev else None
+        try:
+            x, y   = self._cxy(event)
+            tool   = self._tool
+            dev    = self._hit_device(x, y)
+            conn   = self._hit_connection(x, y) if not dev else None
 
-        if tool in ('router', 'switch', 'host'):
-            self._place_device(tool, x, y)
+            if tool in ('router', 'switch', 'host'):
+                self._place_device(tool, x, y)
 
-        elif tool == 'select':
-            hit = dev or conn
-            self._select(hit)
-            if isinstance(hit, DeviceModel):
-                self._drag_state = (x, y, hit.x, hit.y)
+            elif tool == 'select':
+                hit = dev or conn
+                self._select(hit)
+                if isinstance(hit, DeviceModel):
+                    self._drag_state = (x, y, hit.x, hit.y)
 
-        elif tool == 'connect':
-            if dev:
-                if self._connect_src is None:
-                    self._connect_src = dev
-                    self._highlight(dev, C['sel'])
-                    self.v_tool_label.set(f'Conectar: selecciona el segundo nodo desde {dev.name}')
-                elif dev is not self._connect_src:
-                    self._highlight(self._connect_src, self._connect_src.color)
-                    self._make_connection(self._connect_src, dev)
-                    self._connect_src = None
-                    self.v_tool_label.set('Modo: Conectar (clic en dos nodos)')
+            elif tool == 'connect':
+                if dev:
+                    if self._connect_src is None:
+                        self._connect_src = dev
+                        self._highlight(dev, C['sel'])
+                        self.v_tool_label.set(f'Conectar: selecciona el segundo nodo desde {dev.name}')
+                    elif dev is not self._connect_src:
+                        self._highlight(self._connect_src, self._connect_src.color)
+                        self._make_connection(self._connect_src, dev)
+                        self._connect_src = None
+                        self.v_tool_label.set('Modo: Conectar (clic en dos nodos)')
 
-        elif tool == 'delete':
-            hit = dev or conn
-            if hit:
-                self._delete(hit)
+            elif tool == 'delete':
+                hit = dev or conn
+                if hit:
+                    self._delete(hit)
+        except Exception as exc:
+            self._log(f'✗ Error en clic: {exc}', error=True)
+            import traceback; self._log(traceback.format_exc(), error=True)
 
     def _on_drag(self, event):
         if self._tool != 'select' or not self._drag_state:
@@ -655,23 +659,24 @@ class NetLangApp(tk.Tk):
     # ── Selección ─────────────────────────────────────────────────────────
 
     def _select(self, element):
-        # Quitar resaltado anterior
         if isinstance(self.selected, DeviceModel):
             self._highlight(self.selected, self.selected.color)
         elif isinstance(self.selected, ConnectionModel):
-            self.canvas.itemconfig(self.selected.line_id, fill=C['line'], width=2)
+            if self.selected.line_id is not None:
+                self.canvas.itemconfig(self.selected.line_id, fill=C['line'], width=2)
 
         self.selected = element
 
         if isinstance(element, DeviceModel):
             self._highlight(element, C['sel'])
         elif isinstance(element, ConnectionModel):
-            self.canvas.itemconfig(element.line_id, fill=C['sel'], width=3)
+            if element.line_id is not None:
+                self.canvas.itemconfig(element.line_id, fill=C['sel'], width=3)
 
         self._show_props(element)
 
     def _highlight(self, dev: DeviceModel, color: str):
-        if dev.shape_id:
+        if dev.shape_id is not None:
             self.canvas.itemconfig(dev.shape_id, fill=color)
 
     # ── Operaciones con elementos ─────────────────────────────────────────
